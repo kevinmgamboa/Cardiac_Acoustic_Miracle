@@ -26,7 +26,8 @@ def vec_nor(x):
     xMax=max(x);					   # Get the maximun value of the vector
     nVec=np.zeros(lenght);		   # Initializate derivate vector
     nVec = np.divide(x, xMax)
-   holasdaodnaoicnwocnocnoeicnqcncn # Modulo de procesamiento
+    nVec=nVec-np.mean(nVec);
+    nVec=np.divide(nVec,np.max(nVec));
         
     return nVec
 
