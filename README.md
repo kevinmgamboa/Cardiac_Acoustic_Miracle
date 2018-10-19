@@ -12,7 +12,7 @@ Figure. 1.
 
 This evidence could be numerically presented as the energy of the vibratory spectrum (Fig. 2). Then, this vectors could feed a machine learning algorithm in order to classify the signals
 
-![image](https://user-images.githubusercontent.com/15948497/47232257-1ccdc480-d3c7-11e8-8b2a-abf55036af7e.png)
+![image](https://user-images.githubusercontent.com/15948497/47232639-21df4380-d3c8-11e8-9747-3075c1053d99.png)
 Figure. 2.
 
 
