@@ -17,6 +17,7 @@ Figure. 2.
 
 
 ## Description of files
+In these codes we uses Pandas library to manipulate the data
 * "comparacion_normales.py" displays the DFT of 5 normal heart sounds and from each extract the vibratory spectrum
 * "comparacion_patologi.py" displays the DFT of 5 pathological heart sounds and from each extract the vibratory spectrum
 * "ppfunctions_1.py" contains personal processing functions
