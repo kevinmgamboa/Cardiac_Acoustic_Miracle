@@ -9,8 +9,9 @@ Module file containing Python definitions and statements
 
 # Libraries
 import numpy as np
-from scipy.signal import kaiserord, lfilter, firwin
+from scipy.signal import kaiserord, lfilter, firwin, butter
 from scipy.fftpack import fft
+from scipy import signal
 #import peakutils                                # Librery to help in peak detection
 
 # Functions 
@@ -49,6 +50,68 @@ def Energy_value (x):
     """
     y = np.sum(x**2)
     return y
+
+def shannonE_value (x):
+    """
+    Shannon energy of an input signal  
+    """
+    y = sum((x**2)*np.log(x**2))/x.shape[0]
+    return y
+
+def shannonE_vector (x):
+    """
+    Shannon energy of an input signal  
+    """
+    mu = -(x**2)*np.log(x**2)/x.shape[0]
+    y = -(((x**2)*np.log(x**2)) - mu)/np.std(x)
+    return y
+
+def E_VS_LF (pcgFFT1, vTfft1, on):
+    """
+    Energy of PCG Vibratory Spectrum in low Frequencies (E_VS_LF)
+    (frequency components, frequency value vector, on = on percentage or not)
+    According with [1] The total vibratory spectrum can be divided into 7 bands.
+    This is a modification of this 7 bands
+    1. 0-5Hz, 2. 5-25Hz; 3. 25-60Hz; 4. 60-120Hz; 5. 120-400Hz
+
+The PCG signal producess vibrations in the spectrum between 0-2k Hz. 
+[1] Abbas, Abbas K. (Abbas Khudair), Bassam, Rasha and Morgan & Claypool Publishers Phonocardiography signal processing. Morgan & Claypool Publishers, San Rafael, Calif, 2009.
+    """
+    c1 = (np.abs(vTfft1-5)).argmin()
+    c2 = (np.abs(vTfft1-25)).argmin()
+    c3 = (np.abs(vTfft1-120)).argmin()
+    c4 = (np.abs(vTfft1-240)).argmin()
+    c5 = (np.abs(vTfft1-500)).argmin()
+    
+    # All vector energy
+    xAll = Energy_value(pcgFFT1)
+
+    # Procesando de 0.01-5 Hz
+    pcgFFT_F1 = pcgFFT1[0:c1]
+    x1 = Energy_value(pcgFFT_F1)
+    
+    # Procesando de 5-25 Hz
+    pcgFFT_F2 = pcgFFT1[c1:c2]
+    x2 = Energy_value(pcgFFT_F2)
+    
+    # Procesando de 25-120 Hz
+    pcgFFT_F3 = pcgFFT1[c2:c3]
+    x3 = Energy_value(pcgFFT_F3)
+    
+    # Procesando de 120-240 Hz
+    pcgFFT_F4 = pcgFFT1[c3:c4]
+    x4 = Energy_value(pcgFFT_F4)
+    
+    # Procesando de 240-500 Hz
+    pcgFFT_F5 = pcgFFT1[c4:c5]
+    x5 = Energy_value(pcgFFT_F5)
+    
+    x = np.array([xAll, x1, x2, x3, x4, x5])
+    
+    if (on == 'percentage'):
+        x = 100*(x/x[0])
+
+    return x
 
 def E_VS (pcgFFT1, vTfft1, on):
     """
@@ -104,26 +167,60 @@ The PCG signal producess vibrations in the spectrum between 0-2k Hz.
     if (on == 'percentage'):
         x = 100*(x/x[0])
 
-    return x 
-
-def shannonE_value (x):
-    """
-    Shannon energy of an input signal  
-    """
-    y = sum((x**2)*np.log(x**2))/x.shape[0]
-    return y
-
-def shannonE_vector (x):
-    """
-    Shannon energy of an input signal  
-    """
-    mu = -(x**2)*np.log(x**2)/x.shape[0]
-    y = -(((x**2)*np.log(x**2)) - mu)/np.std(x)
-    return y
+    return x
+#-------------------------------------------
+def features_1(data_P1, fs):
+    
+    # Defining the Vibratory Frequency Bands
+    bVec = [0.01, 5, 25, 120, 240, 500, 999]
+    # Initializing Vectors
+    band_matrix = np.zeros((len(bVec),len(data_P1))) # Band Matrix
+    power_matrix = np.zeros((len(bVec),int(1+(len(data_P1)/2)))) # Band Matrix
+    freqs_matrix = np.zeros((len(bVec),int(1+(len(data_P1)/2)))) # Band Matrix
+    SePCG = np.zeros(len(bVec)-1)                            # Shannon Energy in each Band
+    SePWR = np.zeros(len(bVec)-1)                            # Shannon Energy in each Band
+      
+    
+    for i in range(len(bVec)-1):
+        band_matrix[i,:] = butter_bp_fil(data_P1, bVec[i], bVec[i+1], fs)       
+        freqs_matrix[i,:], power_matrix[i,:] = signal.periodogram(band_matrix[i,:], fs, scaling = 'density')
+        SePCG[i] = Energy_value(band_matrix[i,:])
+        SePWR[i] = Energy_value(power_matrix[i,:])
+     
+    SePWR = 1*np.log10(SePWR)
+    SePCG = 1*np.log10(SePCG)
+    
+    return SePWR, SePCG
 
 # -----------------------------------------------------------------------------
 # Filter Processes
 # -----------------------------------------------------------------------------
+
+def butter_bp_coe(lowcut, highcut, fs, order=1):
+    """
+    Butterworth passband filter coefficients b and a
+    Ref: 
+    [1] https://timsainb.github.io/spectrograms-mfccs-and-inversion-in-python.html
+    [2] https://gist.github.com/kastnerkyle/179d6e9a88202ab0a2fe
+    """
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+def butter_bp_fil(data, lowcut, highcut, fs, order=1):
+    """
+    Butterworth passband filter
+    Ref: 
+    [1] https://timsainb.github.io/spectrograms-mfccs-and-inversion-in-python.html
+    [2] https://gist.github.com/kastnerkyle/179d6e9a88202ab0a2fe
+    """
+    b, a = butter_bp_coe(lowcut, highcut, fs, order=order)
+    y = lfilter(b, a, data)
+    return y
+
+
 def Fpass(X,lp):
     """
     Fpass is the function to pass the coefficients of a filter trough a signal'
@@ -174,7 +271,7 @@ def FpassBand(X,hp,lp):
         
     return y
 
-def FpassBand_1(X,Fs,H_cutoff_hz, L_cutoff_hz):
+def FpassBand_1(X,Fs, f1, f2):
     """
     Ref: http://scipy-cookbook.readthedocs.io/items/FIRFilter.html
     http://lagrange.univ-lyon1.fr/docs/scipy/0.17.1/generated/scipy.signal.firwin.html
@@ -192,14 +289,23 @@ def FpassBand_1(X,Fs,H_cutoff_hz, L_cutoff_hz):
     ripple_db = 60.0
     # Compute the order and Kaiser parameter for the FIR filter.
     N, beta = kaiserord(ripple_db, width)
-    # Use firwin with a Kaiser window to create a lowpass FIR filter.
-    taps = firwin(N, L_cutoff_hz/nyq_rate, window=('kaiser', beta))
-    taps_2 = firwin(N, H_cutoff_hz/nyq_rate, pass_zero=False)
+    # 
+    taps = firwin(100, [f1, f2], pass_zero=False)
+#    taps = firwin(N, L_cutoff_hz/nyq_rate, window=('kaiser', beta))
+#    taps_2 = firwin(N, H_cutoff_hz/nyq_rate, pass_zero=True)
     # Use lfilter to filter x with the FIR filter.
-    X_l= lfilter(taps, 1.0, X)
-    X_pb= lfilter(taps_2, 1.0, X_l)
+    X_pb= lfilter(taps, 1.0, X)
+   # X_pb= lfilter(taps_2, 1.0, X_l)
     
     return X_pb[N-1:]
+
+def FpassBand_2(X, f1, f2, Fs):
+    
+    Y = FhighPass(X, Fs, f1)
+    
+    Y = FlowPass(X, Fs, f2)
+    
+    return Y
 
 def FhighPass(X, Fs, H_cutoff_hz):
     """
@@ -317,7 +423,7 @@ def fft_k(data, samplerate, showFrequency):
     Fast Fourier Transform
     Ref: https://docs.scipy.org/doc/scipy/reference/tutorial/fftpack.html
     '''
-    pcgFFT = fft(data)                                                    # FFT Full Vector
+    pcgFFT = fft(data)                                                    # FFT Full Vector 'k' coefficients
     short_pcgFFT = 2.0/np.size(data) * np.abs(pcgFFT[0:np.size(data)//2]) # FFT positives values
     vTfft = np.linspace(0.0, 1.0/(2.0*(1/samplerate)), np.size(data)//2)  # Vector of frequencies (X-axes)
        
