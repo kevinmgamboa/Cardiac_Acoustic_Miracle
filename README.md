@@ -4,7 +4,6 @@ Hello every one. The set of codes here will show an introduction to anyone inter
 
 Please copy and share without doubt !!
 
-
 ## Description of files
 In these codes we uses Pandas library to manipulate the data
 * "loading_data_base.py" this code help us get the .wav files from their local folder "semi-automatically".
