@@ -1,37 +1,90 @@
 # -*- coding: utf-8 -*-
 """
 Personal Processing Functions 1 (ppfunctions_1)
-Module file containing Python definitions and statements
 Created on Mon Apr  9 11:48:37 2018
-Modify: 04/11/2018
 @author: Kevin MAchado
+
+Module file containing Python definitions and statements
 """
 
 # Libraries
 import numpy as np
 from scipy.signal import kaiserord, lfilter, firwin, butter
 from scipy.fftpack import fft
-from scipy import signal
+from scipy import signal as sg
 #import peakutils                                # Librery to help in peak detection
 
 # Functions 
 # Normal energy = np.sum(pcgFFT1**2)
 # Normalized average Shannon Energy = sum((l**2)*np.log(l**2))/l.shape[0]
 # Third Order Shannon Energy = sum((l**3)*np.log(l**3))/l.shape[0]
+# -----------------------------------------------------------------------------
+#                           Statistic Variables
+# -----------------------------------------------------------------------------
+def _variance(x):
+    miu = 0.0
+    vari = 0.0
+    for i in range(x.shape[0]):
+        miu =+ x[i]
+    miu = miu/len(x)
+        
+    for i in range(x.shape[0]):
+        vari = vari + (x[i]-miu)**2
+    vari = vari/len(x)
+    return vari
 
+def _StandarD(x):
+    miu = 0.0
+    vari = 0.0
+    for i in range(x.shape[0]):
+        miu += x[i]
+    miu = miu/len(x)
+    for i in range(x.shape[0]):
+        vari = vari + (x[i]-miu)**2
+    vari = vari/len(x)
+    _Std = vari **(.5)
+    return _Std
+
+def _CV(x):
+    # Coefficient of Variation
+    var = _variance(x)
+    std = _StandarD(x)
+    
+    return 100*(var/std)
+
+# -----------------------------------------------------------------------------
+# PDS
+# -----------------------------------------------------------------------------
 def vec_nor(x):
     """
     Normalize the amplitude of a vector from -1 to 1
     """
-    lenght=np.size(x)				# Get the length of the vector	
-    xMax=max(x);					   # Get the maximun value of the vector
-    nVec=np.zeros(lenght);		   # Initializate derivate vector
-    nVec = np.divide(x, xMax)
+    nVec=np.zeros(len(x));		   # Initializate derivate vector
+    nVec = np.divide(x, max(x))
     nVec=nVec-np.mean(nVec);
     nVec=np.divide(nVec,np.max(nVec));
         
     return nVec
 
+def running_sum(x):
+    """
+    Running Sum Algorithm of an input signal is y[n]= x[n] + y[n-1] 
+    """
+    y = np.zeros(len(x))
+    for i in range(len(x)):
+        y[i] = x[i] + y[i-1]
+        
+    return vec_nor(y)
+
+def derivate_1 (x):
+    """
+    Derivate of an input signal as y[n]= x[n] - x[n-1] 
+    """
+    y=np.zeros(len(x));				# Initializate derivate vector
+    for i in range(len(x)):
+        y[i]=x[i]-x[i-1];		
+    return vec_nor(y)
+        
 def derivate (x):
     """
     Derivate of an input signal as y[n]= x[n+1]- x[n-1] 
@@ -40,6 +93,18 @@ def derivate (x):
     y=np.zeros(lenght);				# Initializate derivate vector
     for i in range(lenght-1):
         y[i]=x[i-1]-x[i];		
+    return y
+
+def derivate_positive (x):
+    """
+    Derivate of an input signal as y[n]= x[n+1]- x[n-1] 
+    for all values where the signal is positive
+    """
+    lenght=x.shape[0]				# Get the length of the vector
+    y=np.zeros(lenght);				# Initializate derivate vector
+    for i in range(lenght-1):
+        if x[i]>0:
+            y[i]=x[i-1]-x[i];		
     return y
 # -----------------------------------------------------------------------------
 # Energy
@@ -62,6 +127,16 @@ def shannonE_vector (x):
     """
     Shannon energy of an input signal  
     """
+    mu = -(x**2)*np.log(x**2)/x.shape[0]
+    y = -(((x**2)*np.log(x**2)) - mu)/np.std(x)
+    return y
+
+def shannonE_vector_1 (x):
+    """
+    Shannon energy of an input signal  
+    """
+    N = x.shape[0]
+#    Se = -(1/N) * 
     mu = -(x**2)*np.log(x**2)/x.shape[0]
     y = -(((x**2)*np.log(x**2)) - mu)/np.std(x)
     return y
@@ -172,7 +247,7 @@ The PCG signal producess vibrations in the spectrum between 0-2k Hz.
 def features_1(data_P1, fs):
     
     # Defining the Vibratory Frequency Bands
-    bVec = [0.01, 5, 25, 120, 240, 500, 999]
+    bVec = [0.01, 120, 240, 350, 425, 500, 999]
     # Initializing Vectors
     band_matrix = np.zeros((len(bVec),len(data_P1))) # Band Matrix
     power_matrix = np.zeros((len(bVec),int(1+(len(data_P1)/2)))) # Band Matrix
@@ -183,7 +258,7 @@ def features_1(data_P1, fs):
     
     for i in range(len(bVec)-1):
         band_matrix[i,:] = butter_bp_fil(data_P1, bVec[i], bVec[i+1], fs)       
-        freqs_matrix[i,:], power_matrix[i,:] = signal.periodogram(band_matrix[i,:], fs, scaling = 'density')
+        freqs_matrix[i,:], power_matrix[i,:] = sg.periodogram(band_matrix[i,:], fs, scaling = 'density')
         SePCG[i] = Energy_value(band_matrix[i,:])
         SePWR[i] = Energy_value(power_matrix[i,:])
      
@@ -195,6 +270,28 @@ def features_1(data_P1, fs):
 # -----------------------------------------------------------------------------
 # Filter Processes
 # -----------------------------------------------------------------------------
+    
+def recursive_moving_average_F(X, Fs, M):
+    """
+    The recursive Moving Average Filter its an algorithm to implement the typical
+    moving average filter more faster. The algorithm is written as:
+    y[i] = y[i-1] + x[i+p] - x[i-q]
+    p = (M - 1)/2,   q = p + 1
+    Ref: Udemy Course "Digital Signal Processing (DSP) From Ground Up™ in Python", 
+    available in: https://www.udemy.com/python-dsp/
+    ---------------------------------------------------------------------------
+    X: input signal
+    Fs: Sampling Frequency
+    M: number of points in M range of time the moving average
+    
+    """
+    p = int(((M*Fs)-1)/2)
+    q = p + 1
+    Y = np.zeros(len(X))
+    for i in range(len(X)):
+        Y[i] = Y[i-1] + X[i-p] - X[i-q]
+        
+    return vec_nor(Y)
 
 def butter_bp_coe(lowcut, highcut, fs, order=1):
     """
@@ -218,7 +315,7 @@ def butter_bp_fil(data, lowcut, highcut, fs, order=1):
     """
     b, a = butter_bp_coe(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data)
-    return y
+    return vec_nor(y)
 
 
 def Fpass(X,lp):
@@ -354,21 +451,80 @@ def FlowPass(X, Fs, L_cutoff_hz):
     X_l= lfilter(taps, 1.0, X)
     
     return X_l[N-1:]
+
 # -----------------------------------------------------------------------------
-# Peak Detection
+           # Segmentation By Running Sum Algorithm & Filters
+# -----------------------------------------------------------------------------
+def seg_RSA1(x, fs):
+    # # Appliying Running Sum Algorithm of PCG filtered from 0.01Hz to 1kHz
+    F_x = running_sum(vec_nor(butter_bp_fil(x, 0.01, 50, fs)))
+    # Smoothing the signal by filtering from 0.01Hz to 5Hz
+    F_x = butter_bp_fil(F_x,0.01, 2, fs)
+    # Appliying 1st derivative to indentify slope sign changes
+    xx = derivate_1(F_x)
+    #
+    xx = butter_bp_fil(xx, 0.01,2, fs)
+    # Transforming positives to 1 & negatives to -1
+    xxS = np.sign(xx)
+    
+    return xxS, F_x
+# -----------------------------------------------------------------------------
+                   # Segmentation By Derivatives
+# -----------------------------------------------------------------------------                                
+def seg_Der1(x, fs):
+    # Segmenting in an specific frequency band
+    pcgPeaks, peaks, allpeaks = PDP(x, fs)
+    # -----------------------------------------------------------------------------
+    # Time processing
+    dT = 0.4          # [1] mean S1 duration 122ms, mean S2 duration 92ms
+    timeV = []
+    timeV.append(0)
+    pointV = []
+    pointV.append(0)
+    segmV = np.zeros(len(x))
+    
+    for i in range(len(pcgPeaks)-1):
+        if pcgPeaks[i]>0.5:
+            timeV.append(i/fs)       # Gives the time when a peak get found
+            pointV.append(i)          # Gives the time when a peak get found
+            if (pointV[-1]/fs)-(pointV[-2]/fs)> dT:
+                segmV[pointV[-2]:pointV[-1]] = 0.4  # Marc a diastolic segment
+            else:
+                segmV[pointV[-2]:pointV[-1]] = 0.6  # Marc a systolic segment
+    
+    return segmV, pcgPeaks
+
+def seg_Der2(x, fs):
+    # Appliying Running Sum Algorithm of PCG filtered from 0.01Hz to 1kHz
+    F_x = running_sum(vec_nor(butter_bp_fil(x, 0.01, 999, fs)))
+    # Smoothing the signal by filtering from 0.01Hz to 5Hz
+    F_x = butter_bp_fil(F_x,0.01, 5, fs)
+    # Time to be represented in samples
+    time_samples = 0.5
+    # Number of samples to move over the signal
+    mC = int(time_samples * fs)                       
+    peaks = np.zeros(len(F_x))
+    p = sg.find_peaks(F_x, distance=mC)
+    # Defining peaks as +1
+    for i in range (len(p[0][:])):
+        peaks[p[0][i]] = 1
+    
+    return peaks                     
+# -----------------------------------------------------------------------------
+                                # Peak Detection
 # -----------------------------------------------------------------------------
 def PDP(Xf, samplerate):
     """
     Peak Detection Process
     """
-    timeCut = samplerate*0.25                       # time to count another pulse
-    vCorte = 0.6
+    timeCut = samplerate*0.25                      # Time to count another pulse
+    vCorte = 0.6                                   # Amplitude threshold
     
-    Xf = vec_nor(Xf)
-    dX=derivate(Xf);				                      # Derivate of the signal
-    dX=vec_nor(dX);			                         # Vector Normalizing
+    Xf = vec_nor(Xf)                               # Normalize signal
+    dX = derivate_positive(Xf);				      # Derivate of the signal
+    dX = vec_nor(dX);			                  # Vector Normalizing
     
-    size=np.shape(Xf)				                  # Rank or dimension of the array
+    size=np.shape(Xf)				                 # Rank or dimension of the array
     fil=size[0];					                     # Number of rows
  
     positive=np.zeros((1,fil+1));                   # Initializating Vector 
@@ -379,55 +535,116 @@ def PDP(Xf, samplerate):
 
     points1=np.zeros((1,fil));                      # Initializating the Peak Points Vector
     points1=points1[0];                             # Getting the point vector
-    
-    vCorte = 0.6
        
     '''
     FIRST! having the positives values of the slope as 1
     And the negative values of the slope as 0
     '''
     for i in range(0,fil):
-        if dX[i]>0:
-            positive[i]=1;
-        else:
-            positive[i]=0;
+        if Xf[i] > 0:
+            if dX[i]>0:
+                positive[i] = Xf[i];
+            else:
+                positive[i] = 0;
     '''
     SECOND! a peak will be found when the ith value is equal to 1 &&
     the ith+1 is equal to 0
     '''
     for i in range(0,fil):
-        if (positive[i]==1 and positive[i+1]==0):
-            points[i]=Xf[i];
+        if (positive[i]==Xf[i] and positive[i+1]==0):
+            points[i] = Xf[i];
         else:
-            points[i]=0;
+            points[i] = 0;
     '''
     THIRD! Define a minimun Peak Height
     '''
     p=0;
     for i in range(0,fil):
-        if (points[i] > vCorte and p==0):
-            p=i
-            points1[i]=Xf[i]
-            
+        if (Xf[i] > vCorte and p==0):
+            p = i
+            points1[i] = Xf[i]
         else:
-            points1[i]=0;
+            points1[i] = 0
             if (p+timeCut < i):
-                p=0
+                p = 0
                     
-    return points1
+    return points1, points, positive[0:(len(positive)-1)]
 # -----------------------------------------------------------------------------
-# Fast Fourier Transform
+# Peak Detection 2
+# -----------------------------------------------------------------------------
+def PDP_2(Xf, samplerate):
+    """
+    Peak Detection Process
+    """
+    timeCut = samplerate*0.25                      # Time to count another pulse
+    vCorte = 0.6                                   # Amplitude threshold
+    
+    #Xf = vec_nor(Xf)                               # Normalize signal
+    dX = np.diff(Xf);				      # Derivate of the signal
+    dX = vec_nor(dX);			                  # Vector Normalizing
+    
+    size=np.shape(Xf)				                 # Rank or dimension of the array
+    fil=size[0];					                     # Number of rows
+ 
+    positive=np.zeros((1,fil+1));                   # Initializating Vector 
+    positive=positive[0];                           # Getting the Vector
+
+    points=np.zeros((1,fil));                       # Initializating the Peak Points Vector
+    points=points[0];                               # Getting the point vector
+
+    points1=np.zeros((1,fil));                      # Initializating the Peak Points Vector
+    points1=points1[0];                             # Getting the point vector
+       
+    '''
+    FIRST! having the positives values of the slope as 1
+    And the negative values of the slope as 0
+    '''
+    for i in range(0,fil):
+        if Xf[i] > 0:
+            if dX[i]>0:
+                positive[i] = Xf[i];
+            else:
+                positive[i] = 0;
+    '''
+    SECOND! a peak will be found when the ith value is equal to 1 &&
+    the ith+1 is equal to 0
+    '''
+    for i in range(0,fil):
+        if (positive[i]==Xf[i] and positive[i+1]==0):
+            points[i] = Xf[i];
+        else:
+            points[i] = 0;
+    '''
+    THIRD! Define a minimun Peak Height
+    '''
+    p=0;
+    for i in range(0,fil):
+        if (Xf[i] > vCorte and p==0):
+            p = i
+            points1[i] = Xf[i]
+        else:
+            points1[i] = 0
+            if (p+timeCut < i):
+                p = 0
+                    
+    return points1, points, positive[0:(len(positive)-1)]
+# -----------------------------------------------------------------------------
+                              # Fast Fourier Transform
 # -----------------------------------------------------------------------------
 def fft_k(data, samplerate, showFrequency):
     '''
-    Fast Fourier Transform
+    Fast Fourier Transform using fftpack from scipy
     Ref: https://docs.scipy.org/doc/scipy/reference/tutorial/fftpack.html
     '''
-    pcgFFT = fft(data)                                                    # FFT Full Vector 'k' coefficients
-    short_pcgFFT = 2.0/np.size(data) * np.abs(pcgFFT[0:np.size(data)//2]) # FFT positives values
-    vTfft = np.linspace(0.0, 1.0/(2.0*(1/samplerate)), np.size(data)//2)  # Vector of frequencies (X-axes)
-       
-    idx = (np.abs(vTfft-showFrequency)).argmin()             # find the value closest to a value
+    # FFT Full Vector 'k' coefficients
+    pcgFFT = fft(data)
+    # FFT positives values                                                    
+    short_pcgFFT = 2.0/np.size(data) * np.abs(pcgFFT[0:(np.size(data)//2)])
+    #short_pcgFFT = 2.0/np.size(data) * np.abs(pcgFFT[(np.size(data)//2):None])  vector selected from the middle to the end
+    # Vector of frequencies (X-axes)
+    vTfft = np.linspace(0.0, 1.0/(2.0*(1/samplerate)), np.size(data)//2)  
+    # find the value closest to a value   
+    idx = (np.abs(vTfft-showFrequency)).argmin()             
     
     return short_pcgFFT[0:idx], vTfft[0:idx]
 
@@ -436,10 +653,38 @@ def fft_k_N(data, samplerate, showFrequency):
     Normalized Fast Fourier Transform
     Ref: https://docs.scipy.org/doc/scipy/reference/tutorial/fftpack.html
     '''
-    pcgFFT = fft(data)                                                    # FFT Full Vector
-    short_pcgFFT = 2.0/np.size(data) * np.abs(pcgFFT[0:np.size(data)//2]) # FFT positives values
-    vTfft = np.linspace(0.0, 1.0/(2.0*(1/samplerate)), np.size(data)//2)  # Vector of frequencies (X-axes)
-       
-    idx = (np.abs(vTfft-showFrequency)).argmin()             # find the value closest to a value
+    # FFT Full Vector 'k' coefficients
+    pcgFFT = fft(data)
+    # FFT positives values from the middle to the end (to evoid the interference at beginning)
+    short_pcgFFT = 2.0/np.size(data) * np.abs(pcgFFT[0:(np.size(data)//2)])
+    #short_pcgFFT = 2.0/np.size(data) * np.abs(pcgFFT[(np.size(data)//2):None])  vector selected from the middle to the end
+    # Vector of frequencies (X-axes)
+    vTfft = np.linspace(0.0, 1.0/(2.0*(1/samplerate)), np.size(data)//2)  
+    # find the value closest to a value   
+    idx = (np.abs(vTfft-showFrequency)).argmin()            
     
     return vec_nor(short_pcgFFT[0:idx]), vTfft[0:idx]
+# -----------------------------------------------------------------------------
+                              # PCG Audio Pre-Processing
+# -----------------------------------------------------------------------------
+def pre_pro_audio_PCG(x, fs):
+# Ensure having a Mono sound
+    if len(x.shape)>1:
+    # select the left size
+        x = x[:,0]
+    # Resampling Audio PCG to 2k Hz
+    Frs = 2000
+    Nrs = int(Frs*(len(x)/fs))
+    if fs > Frs:
+        x = sg.resample(x, Nrs)
+    
+    return vec_nor(x), Frs
+# -----------------------------------------------------------------------------
+#             Pre-Process: Signal basic information (SBI)
+# -----------------------------------------------------------------------------
+def pre_pro_basicInfo_PCG(x, fs):
+    # find the time duration of the sound
+    t_sound = 1/fs*len(x)
+    # make a vector time for the sound
+    vec_time = np.linspace(0, t_sound, len(x))
+    return t_sound, vec_time
