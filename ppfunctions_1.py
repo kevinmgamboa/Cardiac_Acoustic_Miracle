@@ -629,6 +629,41 @@ def PDP_2(Xf, samplerate):
                     
     return points1, points, positive[0:(len(positive)-1)]
 # -----------------------------------------------------------------------------
+# Peak Detection 3 - Janko Slavic
+# -----------------------------------------------------------------------------
+def findpeaks(data, spacing=1, limit=None):
+    """
+    Janko Slavic peak detection algorithm and implementation.
+    https://github.com/jankoslavic/py-tools/tree/master/findpeaks
+    Finds peaks in `data` which are of `spacing` width and >=`limit`.
+    :param ndarray data: data
+    :param float spacing: minimum spacing to the next peak (should be 1 or more)
+    :param float limit: peaks should have value greater or equal
+    :return array: detected peaks indexes array
+    """
+    len = data.size
+    x = np.zeros(len + 2 * spacing)
+    x[:spacing] = data[0] - 1.e-6
+    x[-spacing:] = data[-1] - 1.e-6
+    x[spacing:spacing + len] = data
+    peak_candidate = np.zeros(len)
+    peak_candidate[:] = True
+    for s in range(spacing):
+        start = spacing - s - 1
+        h_b = x[start: start + len]  # before
+        start = spacing
+        h_c = x[start: start + len]  # central
+        start = spacing + s + 1
+        h_a = x[start: start + len]  # after
+        peak_candidate = np.logical_and(peak_candidate, np.logical_and(h_c > h_b, h_c > h_a))
+
+    ind = np.argwhere(peak_candidate)
+    ind = ind.reshape(ind.size)
+    if limit is not None:
+        ind = ind[data[ind] > limit]
+    return ind
+
+# -----------------------------------------------------------------------------
                               # Fast Fourier Transform
 # -----------------------------------------------------------------------------
 def fft_k(data, samplerate, showFrequency):
