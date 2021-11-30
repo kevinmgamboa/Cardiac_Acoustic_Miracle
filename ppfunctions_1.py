@@ -368,6 +368,23 @@ def FpassBand(X,hp,lp):
         
     return y
 
+def bandpass_filter(data, lowcut, highcut, signal_freq, filter_order):
+    """
+    Method responsible for creating and applying Butterworth filter.
+    :param deque data: raw data
+    :param float lowcut: filter lowcut frequency value
+    :param float highcut: filter highcut frequency value
+    :param int signal_freq: signal frequency in samples per second (Hz)
+    :param int filter_order: filter order
+    :return array: filtered data
+    """
+    nyquist_freq = 0.5 * signal_freq
+    low = lowcut / nyquist_freq
+    high = highcut / nyquist_freq
+    b, a = butter(filter_order, [low, high], btype="band")
+    y = lfilter(b, a, data)
+
+    return y
 def FpassBand_1(X,Fs, f1, f2):
     """
     Ref: http://scipy-cookbook.readthedocs.io/items/FIRFilter.html
